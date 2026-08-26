@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WhatsApp</string>
+    <string name="app_tagline">A private web session companion</string>
+    <string name="disclaimer">This is an independent app. It is not affiliated with, endorsed by, or sponsored by WhatsApp or Meta.</string>
+
+    <string name="tab_session">Chats</string>
+    <string name="tab_direct">New chat</string>
+    <string name="tab_scan">Scan</string>
+    <string name="tab_media">Media</string>
+    <string name="tab_settings">Settings</string>
+
+    <string name="session_title">WhatsApp</string>
+    <string name="session_two_title">Second session</string>
+    <string name="session_open_second">Open second session</string>
+    <string name="session_reload">Reload</string>
+    <string name="session_loading">Loading your session</string>
+    <string name="session_desktop_hint">This app uses a desktop browser identity so the web client can show a QR code. Scan it from your phone.</string>
+    <string name="session_link_title">Link with a QR code</string>
+    <string name="session_link_step_1">Open WhatsApp on your phone</string>
+    <string name="session_link_step_2">Tap Menu, Linked devices, then Link a device</string>
+    <string name="session_link_step_3">Point your phone at this code</string>
+    <string name="session_link_show_page">Use the web page instead</string>
+    <string name="session_link_waiting">Waiting for a code from WhatsApp Web</string>
+    <string name="session_opening">Opening WhatsApp Web</string>
+    <string name="session_opening_body">Keep this screen open while your chats load.</string>
+    <string name="cd_link_qr">QR code for linking this device to WhatsApp</string>
+
+    <string name="direct_title">New chat</string>
+    <string name="direct_subtitle">Start a chat without saving the number.</string>
+    <string name="direct_country_label">Country code</string>
+    <string name="direct_phone_label">Phone number</string>
+    <string name="direct_phone_helper">Digits only, without the country code.</string>
+    <string name="direct_message_label">Message (optional)</string>
+    <string name="direct_open">Chat</string>
+    <string name="direct_error_phone">Enter a phone number with 6 to 15 digits.</string>
+    <string name="direct_error_country">Choose a country code.</string>
+
+    <string name="qr_title">Scan QR code</string>
+    <string name="qr_scan_hint">Point your camera at a code</string>
+    <string name="qr_scan_tab">Scan</string>
+    <string name="qr_create_tab">Create</string>
+    <string name="qr_camera_title">Camera access</string>
+    <string name="qr_camera_body">The camera is used only to read QR codes and barcodes, then you can copy or open the result. Nothing is uploaded.</string>
+    <string name="qr_camera_cta">Continue</string>
+    <string name="qr_camera_denied">Camera is off. You can enable it in system settings, or create a code instead.</string>
+    <string name="qr_open_settings">Open settings</string>
+    <string name="qr_content_label">Text or link to encode</string>
+    <string name="qr_create">Create code</string>
+    <string name="qr_share">Share code</string>
+    <string name="qr_save">Save image</string>
+    <string name="qr_result">Scan result</string>
+    <string name="qr_copy">Copy</string>
+    <string name="qr_open_link">Open link</string>
+    <string name="qr_empty">Enter text to create a code.</string>
+    <string name="qr_scan_again">Scan again</string>
+    <string name="qr_saved">Saved to Pictures/WhatsApp</string>
+    <string name="qr_copied">Copied</string>
+
+    <string name="media_title">Media</string>
+    <string name="media_priming_title">Choose the status folder</string>
+    <string name="media_priming_body">Android no longer lets apps read another app’s private folders. Pick the statuses folder once (usually Android/media/com.whatsapp/WhatsApp/Media/.Statuses). This app keeps that permission and never scans the rest of your storage.</string>
+    <string name="media_choose_folder">Choose folder</string>
+    <string name="media_change_folder">Change folder</string>
+    <string name="media_empty">No images or videos in this folder yet. Open a status in WhatsApp, then come back.</string>
+    <string name="media_save">Save</string>
+    <string name="media_saved">Saved to Pictures/WhatsApp</string>
+    <string name="media_error">Could not save this file.</string>
+    <string name="cd_status_item">Status media</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_profile_name">WhatsApp</string>
+    <string name="settings_profile_status">Hey there! I am using WhatsApp.</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_haptics">Haptics</string>
+    <string name="settings_haptics_body">Feel subtle vibrations for taps, saves, and errors.</string>
+    <string name="settings_privacy">Privacy</string>
+    <string name="settings_lock">App lock</string>
+    <string name="settings_lock_body">Require a PIN, with biometrics when the device supports them, before anyone can open your live session.</string>
+    <string name="settings_set_pin">Set PIN</string>
+    <string name="settings_change_pin">Change PIN</string>
+    <string name="settings_session">Session</string>
+    <string name="settings_clear_session">Sign out of web session</string>
+    <string name="settings_clear_session_body">Clears cookies and site data for the web client in this app. Your phone account is unchanged.</string>
+    <string name="settings_about">About</string>
+    <string name="settings_second_session_body">Opens a completely separate web client in another process, so you can scan a second QR code.</string>
+
+    <string name="lock_title">Unlock WhatsApp</string>
+    <string name="lock_body">Your web session is protected on this device.</string>
+    <string name="lock_pin_label">PIN</string>
+    <string name="lock_unlock">Unlock</string>
+    <string name="lock_use_biometric">Use biometrics</string>
+    <string name="lock_error">That PIN does not match.</string>
+    <string name="lock_pin_helper">Choose 4 to 6 digits. This stays on the device.</string>
+    <string name="lock_pin_mismatch">PINs do not match.</string>
+    <string name="lock_pin_confirm_label">Confirm PIN</string>
+    <string name="lock_save_pin">Save PIN</string>
+    <string name="lock_biometric_title">Unlock WhatsApp</string>
+    <string name="lock_biometric_subtitle">Confirm it is you to open the session.</string>
+    <string name="lock_cancel">Cancel</string>
+
+    <string name="cd_back">Back</string>
+    <string name="cd_close">Close</string>
+    <string name="cd_reload">Reload session</string>
+    <string name="cd_second_session">Open second session</string>
+    <string name="cd_qr_preview">Generated QR code</string>
+    <string name="cd_save_media">Save this file</string>
+    <string name="cd_video">Video</string>
+
+    <string name="generic_error">Something went wrong. Try again.</string>
+    <string name="download_started">Download started</string>
+    <string name="download_complete">Download complete</string>
+</resources>
