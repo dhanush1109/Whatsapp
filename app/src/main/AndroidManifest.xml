@@ -53,7 +53,7 @@
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:configChanges="uiMode|orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.Relay.Splash"
@@ -66,7 +66,7 @@
 
         <activity
             android:name=".session.Session2Activity"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:configChanges="uiMode|orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:exported="false"
             android:label="@string/session_two_title"
             android:launchMode="singleTask"

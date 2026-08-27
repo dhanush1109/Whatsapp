@@ -20,3 +20,10 @@
 /tools/*.xml
 /tools/wscanner/
 /tools/ref-apk/
+
+# Local dev/debug scratch artifacts
+/.tmp/
+/.gradle-home/
+/.uiref/
+/debug.log
+/hs_err_pid*.log

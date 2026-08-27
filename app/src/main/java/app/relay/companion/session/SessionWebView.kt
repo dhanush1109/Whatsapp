@@ -114,7 +114,9 @@ private val LAYOUT_FIX_JS = """
     '#app [data-icon="laptop"],#app [data-testid="download-promo"]{display:none !important;}',
     '.two > header,#pane-side > header,#side > header,[data-relay="pane-wrap"] > header{display:none !important;}',
     '.two > [data-relay="main-wrap"],.two > [data-relay="pane-wrap"]{transform:none !important;min-width:0 !important;max-width:none !important;left:0 !important;width:100% !important;flex:1 1 100% !important;}',
-    'html body.relay-chat .two > [data-relay="main-wrap"]{flex:none !important;width:44.444% !important;height:44.444% !important;transform:scale(2.25) !important;transform-origin:top left !important;}',
+    'html body.relay-chat .two > [data-relay="main-wrap"]{flex:1 1 100% !important;width:100% !important;height:100% !important;transform:none !important;overflow:hidden !important;}',
+    'html body.relay-chat #main{zoom:2.25 !important;transform:none !important;flex:none !important;position:fixed !important;top:0 !important;left:0 !important;right:auto !important;bottom:auto !important;width:100% !important;height:100% !important;min-width:0 !important;max-width:none !important;}',
+    'html body.relay-chat #main [role="button"],html body.relay-chat #main button{min-width:0 !important;}',
     'body.relay-chat .two > *:not([data-relay="main-wrap"]):not(#wds-toast-container){display:none !important;}',
     'body.relay-list [data-relay="pane-wrap"]{flex:1 1 100% !important;width:100% !important;}',
     'body.relay-list .two > *:not([data-relay="pane-wrap"]):not(#wds-toast-container){display:none !important;}',
@@ -122,7 +124,13 @@ private val LAYOUT_FIX_JS = """
     '#app,#app *{overscroll-behavior-x:none !important;}',
     'html,body,#app{overflow-x:hidden !important;}',
     'body.relay-list #pane-side [role="listitem"],body.relay-list #pane-side [role="row"],body.relay-list #pane-side [data-testid="cell-frame-container"],body.relay-list #pane-side [tabindex="-1"]{padding-top:12px !important;padding-bottom:12px !important;box-sizing:border-box !important;}',
-    'body.relay-list #pane-side [data-testid="cell-frame-container"]{min-height:80px !important;}'
+    'body.relay-list #pane-side [data-testid="cell-frame-container"]{min-height:80px !important;}',
+    // Dark theme: WhatsApp Web sets the .dark body class from prefers-color-scheme
+    // (answered by our matchMedia override), but leaves its surface/text CSS custom
+    // properties on the light values. Remap the key WDS tokens to WA's dark palette
+    // so panels and text are legible in dark mode.
+    'html.relay-dark,html.relay-dark body{color-scheme:dark !important;--panel-background:#111b21 !important;--panel-background-deep:#0b141a !important;--panel-input-background:#2a3942 !important;--picker-background:#233138 !important;--app-background:#0b141a !important;--app-background-deeper:#000000 !important;--avatar-background:#6a7175 !important;--icon-in-cell-frame-background:#202c33 !important;--navbar-background:#202c33 !important;--WDS-surface-default:#111b21 !important;--WDS-surface-default-RGB:17,27,33 !important;--WDS-surface-elevated-default:#202c33 !important;--WDS-surface-elevated-emphasized:#2a3942 !important;--WDS-background-wash-plain:#0b141a !important;--WDS-background-wash-plain-RGB:11,20,26 !important;--WDS-background-elevated-wash-plain-RGB:32,44,51 !important;--WDS-systems-chat-surface-composer:#202c33 !important;--WDS-systems-chat-surface-composer-RGB:32,44,51 !important;--WDS-systems-chat-surface-tray:#202c33 !important;--WDS-systems-chat-background-wallpaper:#0b141a !important;--WDS-systems-bubble-surface-incoming:#202c33 !important;--WDS-systems-bubble-surface-outgoing:#005c4b !important;--WDS-components-surface-nav-bar:#202c33 !important;--WDS-components-profile-photo-surface-gray:#2a3942 !important;--button-round-background-inverted:#2a3942 !important;--product-placeholder-background:#202c33 !important;--bot-command-pill-background-color:#202c33 !important;}',
+    'html.relay-dark,html.relay-dark body{--primary:#e9edef !important;--primary-strong:#e9edef !important;--primary-stronger:#e9edef !important;--primary-strong-rgb:233,237,239 !important;--primary-stronger-rgb:233,237,239 !important;--message-primary:#e9edef !important;--message-primary-rgb:233,237,239 !important;--WDS-content-default:#E9EDEF !important;--WDS-content-action-default:#E9EDEF !important;--text-primary-strong:#e9edef !important;--modal-title:#e9edef !important;--status-link-preview-title:#e9edef !important;--secondary:#8696a0 !important;--secondary-lighter:#8696a0 !important;--typography-sub-title:#8696a0 !important;--labels-icon:rgba(233,237,239,.6) !important;--block-quote-text:rgba(233,237,239,.7) !important;--WDS-systems-bubble-surface-system:rgba(32,44,51,.92) !important;--WDS-systems-bubble-surface-system-RGB:32,44,51 !important;--system-message-background-color:rgba(32,44,51,.92) !important;}'
   ].join('');
   function viewport() {
     var m = document.querySelector('meta[name="viewport"]');
@@ -194,17 +202,45 @@ private val LAYOUT_FIX_JS = """
 })();
 """.trimIndent()
 
-/** Apply WhatsApp Web's own dark/light theme from a persisted Relay flag before WA boots. */
+/**
+ * Runs at document-start (before WhatsApp Web boots). WhatsApp Web themes itself
+ * off the prefers-color-scheme media query, and Android WebView won't reliably
+ * report dark for an embedded view. So we override matchMedia to answer
+ * prefers-color-scheme from a persisted Relay flag, letting WA switch to its own
+ * fully-native dark theme (correct colors, not a wash-out invert).
+ */
 private val THEME_BOOTSTRAP_JS = """
 (function(){
   var dark = false;
   try { dark = localStorage.getItem('relay-dark') === '1'; } catch (e) {}
-  try { localStorage.setItem('theme', JSON.stringify(dark ? 'dark' : 'light')); } catch (e) {}
   var h = document.documentElement;
-  if (!h) return;
-  h.classList.toggle('dark', dark);
-  h.classList.toggle('light', !dark);
-  h.style.setProperty('color-scheme', dark ? 'dark' : 'light', 'important');
+  if (h && dark) h.classList.add('relay-dark');
+  if (window.__relayMMPatched) return;
+  window.__relayMMPatched = true;
+  function relayDark(){
+    try { return localStorage.getItem('relay-dark') === '1'; } catch (e) { return false; }
+  }
+  var orig = window.matchMedia ? window.matchMedia.bind(window) : null;
+  if (!orig) return;
+  window.matchMedia = function(query){
+    var mql = orig(query);
+    if (typeof query === 'string' && query.indexOf('prefers-color-scheme') !== -1) {
+      var wantsDark = query.indexOf('dark') !== -1;
+      var wantsLight = query.indexOf('light') !== -1;
+      try {
+        Object.defineProperty(mql, 'matches', {
+          configurable: true,
+          get: function(){
+            var d = relayDark();
+            if (wantsDark) return d;
+            if (wantsLight) return !d;
+            return false;
+          }
+        });
+      } catch (e) {}
+    }
+    return mql;
+  };
 })();
 """.trimIndent()
 
@@ -213,25 +249,18 @@ private fun themeJs(dark: Boolean): String {
     return """
 (function(){
   var dark = $flag;
-  window.__relayDark = dark;
   try { localStorage.setItem('relay-dark', dark ? '1' : '0'); } catch (e) {}
-  try { localStorage.setItem('theme', JSON.stringify(dark ? 'dark' : 'light')); } catch (e) {}
-  function paint() {
-    var h = document.documentElement;
-    if (!h) return;
-    h.classList.toggle('dark', dark);
-    h.classList.toggle('light', !dark);
-    h.style.setProperty('color-scheme', dark ? 'dark' : 'light', 'important');
-    if (document.body) {
-      document.body.classList.toggle('dark', dark);
-      document.body.classList.toggle('light', !dark);
+  var h = document.documentElement;
+  if (h) h.classList.toggle('relay-dark', dark);
+  try {
+    var mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+    if (mq && typeof mq.dispatchEvent === 'function') {
+      var ev;
+      try { ev = new MediaQueryListEvent('change', { matches: dark, media: '(prefers-color-scheme: dark)' }); }
+      catch (e) { ev = new Event('change'); }
+      mq.dispatchEvent(ev);
     }
-  }
-  paint();
-  if (!window.__relayThemeObs && document.documentElement) {
-    window.__relayThemeObs = new MutationObserver(function(){ paint(); });
-    window.__relayThemeObs.observe(document.documentElement, {attributes:true, attributeFilter:['class']});
-  }
+  } catch (e) {}
 })();
 """.trimIndent()
 }
@@ -617,7 +646,10 @@ class SessionController(context: Context) {
 
     fun setDarkMode(dark: Boolean) {
         darkMode = dark
-        applyAlgorithmicDarkening(dark)
+        // WhatsApp Web themes itself from prefers-color-scheme, which our
+        // document-start matchMedia override answers from the persisted flag.
+        // No WebView algorithmic darkening (would double-darken WA's own theme).
+        applyAlgorithmicDarkening(false)
         val bg = if (dark) Color.parseColor("#0B141A") else Color.WHITE
         webView.post {
             webView.setBackgroundColor(bg)
@@ -628,8 +660,7 @@ class SessionController(context: Context) {
     private fun applyAlgorithmicDarkening(dark: Boolean) {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
             WebSettingsCompat.setAlgorithmicDarkeningAllowed(webView.settings, dark)
-        }
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+        } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
             @Suppress("DEPRECATION")
             WebSettingsCompat.setForceDark(
                 webView.settings,
