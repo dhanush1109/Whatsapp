@@ -115,8 +115,7 @@ private val LAYOUT_FIX_JS = """
     '.two > header,#pane-side > header,#side > header,[data-relay="pane-wrap"] > header{display:none !important;}',
     '.two > [data-relay="main-wrap"],.two > [data-relay="pane-wrap"]{transform:none !important;min-width:0 !important;max-width:none !important;left:0 !important;width:100% !important;flex:1 1 100% !important;}',
     'html body.relay-chat .two > [data-relay="main-wrap"]{flex:1 1 100% !important;width:100% !important;height:100% !important;transform:none !important;overflow:hidden !important;}',
-    'html body.relay-chat #main{zoom:2.25 !important;transform:none !important;flex:none !important;position:fixed !important;top:0 !important;left:0 !important;right:auto !important;bottom:auto !important;width:100% !important;height:100% !important;min-width:0 !important;max-width:none !important;}',
-    'html body.relay-chat #main .copyable-text,html body.relay-chat #main [data-id] > div{--max-width:88% !important;max-width:88% !important;}',
+    'html body.relay-chat #main{transform:none !important;flex:none !important;position:fixed !important;top:0 !important;left:0 !important;right:auto !important;bottom:auto !important;width:100% !important;height:100% !important;min-width:0 !important;max-width:none !important;}',
     'html body.relay-chat #main [role="button"],html body.relay-chat #main button{min-width:0 !important;}',
     'body.relay-chat .two > *:not([data-relay="main-wrap"]):not(#wds-toast-container){display:none !important;}',
     'body.relay-list [data-relay="pane-wrap"]{flex:1 1 100% !important;width:100% !important;}',
@@ -140,7 +139,15 @@ private val LAYOUT_FIX_JS = """
       m.setAttribute('name', 'viewport');
       (document.head || document.documentElement).appendChild(m);
     }
-    m.setAttribute('content', 'width=800, initial-scale=1, maximum-scale=4, user-scalable=yes');
+    // In a chat we want WhatsApp's own mobile-responsive layout at the true
+    // device width so nothing overflows horizontally (a wide fixed width plus
+    // CSS zoom paints far wider than the screen and pans the view, clipping the
+    // left edge). The "bigger" in-chat feel is delivered via WebView textZoom.
+    // The chat list keeps the wider desktop-style layout.
+    var inChat = document.body && document.body.classList.contains('relay-chat');
+    m.setAttribute('content', inChat
+      ? 'width=device-width, initial-scale=1, maximum-scale=4, user-scalable=yes'
+      : 'width=800, initial-scale=1, maximum-scale=4, user-scalable=yes');
   }
   function hidePromos() {
     var nodes = document.querySelectorAll('[role="dialog"],[data-animate-modal-popup],[data-animate-modal-backdrop]');
@@ -173,11 +180,12 @@ private val LAYOUT_FIX_JS = """
       main.querySelector('[data-testid="conversation-compose-box-input"]') ||
       main.querySelector('header img')
     ));
+    var wasChat = b.classList.contains('relay-chat');
     b.classList.toggle('relay-chat', inChat);
     b.classList.toggle('relay-list', !inChat);
+    if (wasChat !== inChat) viewport();
   }
   function apply() {
-    viewport();
     var s = document.getElementById(id);
     if (!s) {
       s = document.createElement('style');
@@ -187,6 +195,7 @@ private val LAYOUT_FIX_JS = """
     s.textContent = css;
     hidePromos();
     paneState();
+    viewport();
     if (!window.__relayPaneObs) {
       window.__relayPaneObs = new MutationObserver(function(){
         if (window.__relayPaneRaf) return;

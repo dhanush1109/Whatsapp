@@ -167,7 +167,7 @@ fun SessionPane(
     }
 
     LaunchedEffect(inChat, listTextZoom) {
-        controller.setTextZoom(if (inChat) 100 else listTextZoom)
+        controller.setTextZoom(if (inChat) PreferencesRepository.WEB_CHAT_ZOOM else listTextZoom)
     }
 
     LaunchedEffect(progress, pageReady) {
