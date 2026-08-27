@@ -116,6 +116,7 @@ private val LAYOUT_FIX_JS = """
     '.two > [data-relay="main-wrap"],.two > [data-relay="pane-wrap"]{transform:none !important;min-width:0 !important;max-width:none !important;left:0 !important;width:100% !important;flex:1 1 100% !important;}',
     'html body.relay-chat .two > [data-relay="main-wrap"]{flex:1 1 100% !important;width:100% !important;height:100% !important;transform:none !important;overflow:hidden !important;}',
     'html body.relay-chat #main{zoom:2.25 !important;transform:none !important;flex:none !important;position:fixed !important;top:0 !important;left:0 !important;right:auto !important;bottom:auto !important;width:100% !important;height:100% !important;min-width:0 !important;max-width:none !important;}',
+    'html body.relay-chat #main .copyable-text,html body.relay-chat #main [data-id] > div{--max-width:88% !important;max-width:88% !important;}',
     'html body.relay-chat #main [role="button"],html body.relay-chat #main button{min-width:0 !important;}',
     'body.relay-chat .two > *:not([data-relay="main-wrap"]):not(#wds-toast-container){display:none !important;}',
     'body.relay-list [data-relay="pane-wrap"]{flex:1 1 100% !important;width:100% !important;}',
