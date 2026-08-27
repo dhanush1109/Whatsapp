@@ -1,6 +1,7 @@
 package app.relay.companion.ui.session
 
 import android.Manifest
+import android.app.Activity
 import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.PermissionRequest
@@ -10,16 +11,24 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -30,6 +39,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,15 +48,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.relay.companion.R
+import app.relay.companion.data.PreferencesRepository
 import app.relay.companion.session.LinkState
 import app.relay.companion.session.SessionController
+import app.relay.companion.ui.components.SessionLoadingScreen
 import app.relay.companion.ui.components.SessionSkeleton
 import app.relay.companion.ui.theme.Motion
 import app.relay.companion.ui.theme.RelayColor
@@ -54,13 +68,18 @@ import app.relay.companion.ui.theme.Spacing
 import kotlinx.coroutines.delay
 
 private const val QR_POLL_INTERVAL_MS = 900L
-private val TopBarHeight = 56.dp
+private const val CHAT_POLL_INTERVAL_MS = 400L
+private val TopBarHeight = 48.dp
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SessionPane(
     controller: SessionController,
     modifier: Modifier = Modifier,
+    listTextZoom: Int = PreferencesRepository.WEB_TEXT_ZOOM_DEFAULT,
+    darkTheme: Boolean = isSystemInDarkTheme(),
     onOpenSecond: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null,
 ) {
     val progress by controller.progress.collectAsStateWithLifecycle()
     val pageReady by controller.pageReady.collectAsStateWithLifecycle()
@@ -71,6 +90,7 @@ fun SessionPane(
     var refreshing by remember { mutableStateOf(false) }
     var preferWebPage by remember { mutableStateOf(false) }
     var sawQr by remember { mutableStateOf(false) }
+    var inChat by remember { mutableStateOf(false) }
 
     val fileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
@@ -139,6 +159,17 @@ fun SessionPane(
         }
     }
 
+    LaunchedEffect(controller) {
+        while (true) {
+            inChat = controller.isChatOpen()
+            delay(CHAT_POLL_INTERVAL_MS)
+        }
+    }
+
+    LaunchedEffect(inChat, listTextZoom) {
+        controller.setTextZoom(if (inChat) 100 else listTextZoom)
+    }
+
     LaunchedEffect(progress, pageReady) {
         if (progress == 100 || pageReady) {
             hasLoadedOnce = true
@@ -163,21 +194,40 @@ fun SessionPane(
     val qrState = linkState as? LinkState.Qr
     val showLinkCard = qrState != null && !preferWebPage
     val showOpening = sawQr && linkState is LinkState.None && !preferWebPage
-    val showTopBar = !showLinkCard
-    val dark = isSystemInDarkTheme()
+    val showTopBar = !showLinkCard && !inChat
+    val dark = darkTheme
+    val imeVisible = WindowInsets.isImeVisible
+    var menuOpen by remember { mutableStateOf(false) }
+    val view = LocalView.current
+    LaunchedEffect(imeVisible) {
+        if (imeVisible) controller.revealComposer()
+    }
+    SideEffect {
+        val window = (view.context as? Activity)?.window ?: return@SideEffect
+        WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars =
+            if (showTopBar || inChat) false else !dark
+    }
 
     Column(modifier) {
+        if (inChat && !showLinkCard) {
+            Surface(
+                color = if (dark) RelayColor.AppBarDark else RelayColor.Accent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsTopHeight(WindowInsets.statusBars),
+            ) {}
+        }
         if (showTopBar) {
             Surface(
                 color = if (dark) RelayColor.AppBarDark else RelayColor.Accent,
                 contentColor = Color.White,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(TopBarHeight),
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .height(TopBarHeight)
                         .padding(start = Spacing.md),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -187,23 +237,73 @@ fun SessionPane(
                         color = Color.White,
                         modifier = Modifier.weight(1f),
                     )
-                    IconButton(
-                        onClick = {
-                            preferWebPage = false
-                            controller.reload()
-                        },
-                    ) {
+                    IconButton(onClick = { controller.clickSearch() }) {
                         Icon(
-                            painter = painterResource(R.drawable.ic_refresh),
-                            contentDescription = stringResource(R.string.cd_reload),
+                            painter = painterResource(R.drawable.ic_search),
+                            contentDescription = stringResource(R.string.cd_search),
                             tint = Color.White,
                         )
+                    }
+                    IconButton(onClick = { controller.clickNewChat() }) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_chat_add),
+                            contentDescription = stringResource(R.string.cd_new_chat),
+                            tint = Color.White,
+                        )
+                    }
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_more_vert),
+                                contentDescription = stringResource(R.string.cd_more),
+                                tint = Color.White,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuOpen,
+                            onDismissRequest = { menuOpen = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.session_reload)) },
+                                onClick = {
+                                    menuOpen = false
+                                    preferWebPage = false
+                                    controller.reload()
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_refresh),
+                                        contentDescription = null,
+                                    )
+                                },
+                            )
+                            if (onOpenSettings != null) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.tab_settings)) },
+                                    onClick = {
+                                        menuOpen = false
+                                        onOpenSettings()
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_settings_outline),
+                                            contentDescription = null,
+                                        )
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
 
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .imePadding(),
+        ) {
             PullToRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = {
@@ -219,14 +319,20 @@ fun SessionPane(
                             (parent as? ViewGroup)?.removeView(this)
                         }
                     },
+                    update = { webView ->
+                        webView.setBackgroundColor(
+                            if (dark) 0xFF0B141A.toInt() else android.graphics.Color.WHITE,
+                        )
+                    },
                     modifier = Modifier
                         .fillMaxSize()
                         .nestedScroll(rememberNestedScrollInteropConnection()),
                 )
             }
 
+            val showLoading = (!hasLoadedOnce && !showLinkCard) || showOpening
             androidx.compose.animation.AnimatedVisibility(
-                visible = progress in 1..99,
+                visible = refreshing && !showLoading && progress in 1..99,
                 enter = fadeIn(Motion.defaultEffectsSpec()),
                 exit = fadeOut(Motion.defaultEffectsSpec()),
                 modifier = Modifier
@@ -236,11 +342,22 @@ fun SessionPane(
                 LinearProgressIndicator(
                     progress = { progress / 100f },
                     modifier = Modifier.fillMaxWidth(),
+                    color = RelayColor.Accent,
                 )
             }
 
             androidx.compose.animation.AnimatedVisibility(
-                visible = !hasLoadedOnce,
+                visible = showLoading,
+                enter = fadeIn(Motion.defaultEffectsSpec()),
+                exit = fadeOut(Motion.defaultEffectsSpec()),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                SessionLoadingScreen(progress = progress, modifier = Modifier.fillMaxSize())
+            }
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = refreshing && hasLoadedOnce && !showLinkCard && !showOpening,
+                enter = fadeIn(Motion.defaultEffectsSpec()),
                 exit = fadeOut(Motion.defaultEffectsSpec()),
                 modifier = Modifier.fillMaxSize(),
             ) {
@@ -262,33 +379,24 @@ fun SessionPane(
                 }
             }
 
+            val showFab = !showLinkCard && !showOpening && !imeVisible && !inChat
             androidx.compose.animation.AnimatedVisibility(
-                visible = showOpening,
+                visible = showFab,
                 enter = fadeIn(Motion.defaultEffectsSpec()),
                 exit = fadeOut(Motion.defaultEffectsSpec()),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(Spacing.md),
             ) {
-                Surface(color = MaterialTheme.colorScheme.surface) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(Spacing.lg),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        CircularProgressIndicator()
-                        Text(
-                            text = stringResource(R.string.session_opening),
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(top = Spacing.lg),
-                        )
-                        Text(
-                            text = stringResource(R.string.session_opening_body),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = Spacing.sm),
-                        )
-                    }
+                FloatingActionButton(
+                    onClick = { controller.clickNewChat() },
+                    containerColor = RelayColor.Fab,
+                    contentColor = Color.White,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_chat_add),
+                        contentDescription = stringResource(R.string.cd_new_chat),
+                    )
                 }
             }
         }

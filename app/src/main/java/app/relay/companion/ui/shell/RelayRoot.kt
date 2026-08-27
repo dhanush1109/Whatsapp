@@ -11,10 +11,17 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -52,6 +59,7 @@ import app.relay.companion.R
 import app.relay.companion.data.PreferencesRepository
 import app.relay.companion.data.RelaySettings
 import app.relay.companion.data.ThemePreference
+import app.relay.companion.data.resolveDark
 import app.relay.companion.session.Session2Activity
 import app.relay.companion.session.SessionController
 import app.relay.companion.session.SessionViewModel
@@ -154,6 +162,7 @@ fun RelayRoot(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RelayShellContent(
     tab: RelayTab,
@@ -167,6 +176,11 @@ private fun RelayShellContent(
 ) {
     val haptics = rememberRelayHaptics(settings.hapticsEnabled)
     var backProgress by remember { mutableFloatStateOf(0f) }
+    val dark = settings.theme.resolveDark(isSystemInDarkTheme())
+
+    LaunchedEffect(dark) {
+        controller.setDarkMode(dark)
+    }
 
     PredictiveBackHandler { progress ->
         try {
@@ -174,6 +188,8 @@ private fun RelayShellContent(
             backProgress = 0f
             if (tab != RelayTab.Session) {
                 onTabChange(RelayTab.Session)
+            } else if (controller.closeChat()) {
+                // chat closed -> back on chat list, stay in app
             } else if (!controller.goBack()) {
                 onExitApp()
             }
@@ -194,15 +210,19 @@ private fun RelayShellContent(
         label = "webViewAlpha",
     )
 
+    val imeVisible = WindowInsets.isImeVisible
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { RelaySnackbarHost(snackbarHostState) },
         bottomBar = {
-            RelayNavigationBar(tab = tab, onTabChange = { newTab ->
-                if (newTab != tab) {
-                    haptics.perform(RelayHapticEvent.Tick)
-                    onTabChange(newTab)
-                }
-            })
+            if (!imeVisible) {
+                RelayNavigationBar(tab = tab, onTabChange = { newTab ->
+                    if (newTab != tab) {
+                        haptics.perform(RelayHapticEvent.Tick)
+                        onTabChange(newTab)
+                    }
+                })
+            }
         },
     ) { inner ->
         Box(
@@ -212,7 +232,10 @@ private fun RelayShellContent(
         ) {
             SessionPane(
                 controller = controller,
+                listTextZoom = settings.webTextZoom,
+                darkTheme = dark,
                 onOpenSecond = onOpenSecond,
+                onOpenSettings = { onTabChange(RelayTab.Settings) },
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
@@ -284,6 +307,10 @@ private fun RelayNavigationBar(
 ) {
     val reducedMotion = LocalReducedMotion.current
     NavigationBar(
+        modifier = Modifier
+            .height(64.dp)
+            .windowInsetsPadding(WindowInsets.navigationBars),
+        windowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
     ) {

@@ -11,6 +11,8 @@ import android.os.Environment
 import android.util.Log
 import android.view.View
 import android.webkit.ConsoleMessage
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import android.webkit.CookieManager
 import android.webkit.PermissionRequest
 import android.webkit.URLUtil
@@ -28,6 +30,7 @@ import androidx.webkit.UserAgentMetadata
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import app.relay.companion.BuildConfig
 import app.relay.companion.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,8 +55,8 @@ private const val DESKTOP_UA =
  * unless the client looks like desktop Chrome. The desktop [DESKTOP_UA] does the
  * heavy lifting; this script only keeps the JS-visible identity consistent with it.
  *
- * Deliberately narrow: overriding `matchMedia` or the page's viewport breaks
- * WhatsApp's own responsive layout, which is what hid the login QR before.
+ * Deliberately narrow: do not override `matchMedia`. The layout script owns the
+ * viewport so WhatsApp lays out at a desktop width and the WebView scales it.
  */
 private val DESKTOP_SPOOF_JS = """
 (function() {
@@ -97,15 +100,30 @@ private val DESKTOP_SPOOF_JS = """
 """.trimIndent()
 
 /**
- * After a successful scan, WhatsApp Web mounts a desktop app shell that sizes
- * `#app` as `height: 100%` of `html`. In Android WebView that percentage collapses
- * to 0, so the chat list is in the DOM but clipped to a blank grey screen.
- * `position: fixed; inset: 0` sizes against the actual viewport instead.
+ * WhatsApp Web sizes `#app` as `height: 100%` of `html`, which collapses to 0 in
+ * Android WebView. Pin `#app` to the viewport, force an 800px layout width so the
+ * desktop shell does not crush into phone CSS pixels, and hide the Windows promo.
+ * The WebView then scales that desktop page to fit (`loadWithOverviewMode`).
  */
 private val LAYOUT_FIX_JS = """
 (function() {
   var id = 'relay-layout-fix';
-  var css = '#app{position:fixed !important;top:0 !important;right:0 !important;bottom:0 !important;left:0 !important;width:auto !important;height:auto !important;min-height:100vh !important;overflow:hidden !important;}html,body{height:100vh !important;min-height:100vh !important;width:100% !important;max-width:100% !important;}.two{min-width:0 !important;width:100% !important;height:100% !important;min-height:100% !important;}';
+  var css = [
+    '#app{position:fixed !important;inset:0 !important;width:auto !important;height:auto !important;overflow:hidden !important;}',
+    'html,body{height:100% !important;min-height:100% !important;}',
+    '#app [data-icon="laptop"],#app [data-testid="download-promo"]{display:none !important;}',
+    '.two > header,#pane-side > header,#side > header,[data-relay="pane-wrap"] > header{display:none !important;}',
+    '.two > [data-relay="main-wrap"],.two > [data-relay="pane-wrap"]{transform:none !important;min-width:0 !important;max-width:none !important;left:0 !important;width:100% !important;flex:1 1 100% !important;}',
+    'html body.relay-chat .two > [data-relay="main-wrap"]{flex:none !important;width:44.444% !important;height:44.444% !important;transform:scale(2.25) !important;transform-origin:top left !important;}',
+    'body.relay-chat .two > *:not([data-relay="main-wrap"]):not(#wds-toast-container){display:none !important;}',
+    'body.relay-list [data-relay="pane-wrap"]{flex:1 1 100% !important;width:100% !important;}',
+    'body.relay-list .two > *:not([data-relay="pane-wrap"]):not(#wds-toast-container){display:none !important;}',
+    '#pane-side,#main{position:relative !important;left:auto !important;width:100% !important;min-width:0 !important;max-width:none !important;flex:1 1 100% !important;}',
+    '#app,#app *{overscroll-behavior-x:none !important;}',
+    'html,body,#app{overflow-x:hidden !important;}',
+    'body.relay-list #pane-side [role="listitem"],body.relay-list #pane-side [role="row"],body.relay-list #pane-side [data-testid="cell-frame-container"],body.relay-list #pane-side [tabindex="-1"]{padding-top:12px !important;padding-bottom:12px !important;box-sizing:border-box !important;}',
+    'body.relay-list #pane-side [data-testid="cell-frame-container"]{min-height:80px !important;}'
+  ].join('');
   function viewport() {
     var m = document.querySelector('meta[name="viewport"]');
     if (!m) {
@@ -113,43 +131,7 @@ private val LAYOUT_FIX_JS = """
       m.setAttribute('name', 'viewport');
       (document.head || document.documentElement).appendChild(m);
     }
-    m.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
-  }
-  function apply() {
-    viewport();
-    var s = document.getElementById(id);
-    if (!s) {
-      s = document.createElement('style');
-      s.id = id;
-      (document.head || document.documentElement).appendChild(s);
-    }
-    s.textContent = css;
-  }
-  apply();
-  document.addEventListener('DOMContentLoaded', apply);
-})();
-""".trimIndent()
-
-/**
- * Desktop identity stays (needed to link). Layout is list OR thread, never both
- * stacked. Do not set flex-direction:column — that is what crushed the desktop pane.
- */
-private val PHONE_UI_JS = """
-(function() {
-  var id = 'relay-phone-ui';
-  var last = 0;
-  var baseCss = [
-    'html,body,#app{width:100% !important;max-width:100% !important;}',
-    '#app > div > header,[data-testid="chat-nav"]{display:none !important;}',
-    '#app [data-icon="laptop"],#app [data-testid="download-promo"]{display:none !important;}',
-    '.two,#app > div{min-width:0 !important;max-width:100% !important;}'
-  ].join('');
-  var listCss = baseCss + '#pane-side,#side{display:flex !important;width:100% !important;max-width:100% !important;flex:1 1 100% !important;min-width:0 !important;}#main{display:none !important;}';
-  var threadCss = baseCss + '#pane-side,#side{display:none !important;}#main{display:flex !important;position:fixed !important;inset:0 !important;width:100% !important;height:100% !important;z-index:20 !important;}';
-  function conversationOpen() {
-    var main = document.getElementById('main');
-    if (!main) return false;
-    return !!main.querySelector('footer');
+    m.setAttribute('content', 'width=800, initial-scale=1, maximum-scale=4, user-scalable=yes');
   }
   function hidePromos() {
     var nodes = document.querySelectorAll('[role="dialog"],[data-animate-modal-popup],[data-animate-modal-backdrop]');
@@ -160,28 +142,198 @@ private val PHONE_UI_JS = """
       }
     }
   }
+  function tag(el, name){ if (el) el.setAttribute('data-relay', name); }
+  function paneState() {
+    var b = document.body; if (!b) return;
+    var main = document.querySelector('#main');
+    var pane = document.querySelector('#pane-side');
+    var row = document.querySelector('.two');
+    tag(row, 'row');
+    function wrapperOf(node) {
+      var e = node;
+      while (e && e.parentElement !== row) e = e.parentElement;
+      return (e && e.parentElement === row) ? e : null;
+    }
+    var pw = pane ? wrapperOf(pane) : null;
+    var mw = main ? wrapperOf(main) : null;
+    if (!mw && pw && pw.nextElementSibling) mw = pw.nextElementSibling;
+    tag(pw, 'pane-wrap');
+    tag(mw, 'main-wrap');
+    var inChat = !!(main && (
+      main.querySelector('footer [contenteditable="true"]') ||
+      main.querySelector('[data-testid="conversation-compose-box-input"]') ||
+      main.querySelector('header img')
+    ));
+    b.classList.toggle('relay-chat', inChat);
+    b.classList.toggle('relay-list', !inChat);
+  }
   function apply() {
-    var now = Date.now();
-    if (now - last < 200) return;
-    last = now;
+    viewport();
     var s = document.getElementById(id);
     if (!s) {
       s = document.createElement('style');
       s.id = id;
       (document.head || document.documentElement).appendChild(s);
     }
-    s.textContent = conversationOpen() ? threadCss : listCss;
+    s.textContent = css;
     hidePromos();
+    paneState();
+    if (!window.__relayPaneObs) {
+      window.__relayPaneObs = new MutationObserver(function(){
+        if (window.__relayPaneRaf) return;
+        window.__relayPaneRaf = requestAnimationFrame(function(){
+          window.__relayPaneRaf = 0;
+          paneState();
+        });
+      });
+      window.__relayPaneObs.observe(document.documentElement, {childList:true, subtree:true});
+    }
   }
   apply();
   document.addEventListener('DOMContentLoaded', apply);
-  document.addEventListener('click', function() { setTimeout(apply, 50); }, true);
-  if (window.__relayPhoneUi) return;
-  window.__relayPhoneUi = true;
-  var obs = new MutationObserver(function() { apply(); });
-  obs.observe(document.documentElement, {childList:true, subtree:true});
 })();
 """.trimIndent()
+
+/** Apply WhatsApp Web's own dark/light theme from a persisted Relay flag before WA boots. */
+private val THEME_BOOTSTRAP_JS = """
+(function(){
+  var dark = false;
+  try { dark = localStorage.getItem('relay-dark') === '1'; } catch (e) {}
+  try { localStorage.setItem('theme', JSON.stringify(dark ? 'dark' : 'light')); } catch (e) {}
+  var h = document.documentElement;
+  if (!h) return;
+  h.classList.toggle('dark', dark);
+  h.classList.toggle('light', !dark);
+  h.style.setProperty('color-scheme', dark ? 'dark' : 'light', 'important');
+})();
+""".trimIndent()
+
+private fun themeJs(dark: Boolean): String {
+    val flag = if (dark) "true" else "false"
+    return """
+(function(){
+  var dark = $flag;
+  window.__relayDark = dark;
+  try { localStorage.setItem('relay-dark', dark ? '1' : '0'); } catch (e) {}
+  try { localStorage.setItem('theme', JSON.stringify(dark ? 'dark' : 'light')); } catch (e) {}
+  function paint() {
+    var h = document.documentElement;
+    if (!h) return;
+    h.classList.toggle('dark', dark);
+    h.classList.toggle('light', !dark);
+    h.style.setProperty('color-scheme', dark ? 'dark' : 'light', 'important');
+    if (document.body) {
+      document.body.classList.toggle('dark', dark);
+      document.body.classList.toggle('light', !dark);
+    }
+  }
+  paint();
+  if (!window.__relayThemeObs && document.documentElement) {
+    window.__relayThemeObs = new MutationObserver(function(){ paint(); });
+    window.__relayThemeObs.observe(document.documentElement, {attributes:true, attributeFilter:['class']});
+  }
+})();
+""".trimIndent()
+}
+
+/**
+ * Keep the focused compose box above the Android keyboard. WhatsApp Web is a
+ * desktop layout: when the WebView shrinks, the visual viewport changes but
+ * the focused contenteditable is not scrolled into view on its own.
+ */
+private val KEYBOARD_JS = """
+(function() {
+  if (window.__relayKeyboard) return;
+  window.__relayKeyboard = true;
+  function isEditable(el) {
+    if (!el || el === document.body || el === document.documentElement) return false;
+    if (el.isContentEditable) return true;
+    var tag = (el.tagName || '').toLowerCase();
+    return tag === 'textarea' || tag === 'input';
+  }
+  function composer() {
+    var a = document.activeElement;
+    if (isEditable(a)) return a;
+    return document.querySelector('#main footer [contenteditable="true"]')
+      || document.querySelector('#main [contenteditable="true"]')
+      || document.querySelector('[data-testid="conversation-compose-box-input"]')
+      || document.querySelector('footer [contenteditable="true"]');
+  }
+  function reveal() {
+    var el = composer();
+    var vv = window.visualViewport;
+    var app = document.getElementById('app');
+    var overlap = 0;
+    if (vv) overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    if (app) app.style.setProperty('bottom', overlap + 'px', 'important');
+    if (!el) return;
+    try { el.scrollIntoView({block: 'end', inline: 'nearest'}); } catch (e) {
+      try { el.scrollIntoView(false); } catch (e2) {}
+    }
+  }
+  window.__relayRevealComposer = reveal;
+  document.addEventListener('focusin', function(e) {
+    if (isEditable(e.target)) setTimeout(reveal, 50);
+  }, true);
+  window.addEventListener('resize', function() { setTimeout(reveal, 50); });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', function() { setTimeout(reveal, 50); });
+    window.visualViewport.addEventListener('scroll', function() { setTimeout(reveal, 50); });
+  }
+})();
+""".trimIndent()
+
+private fun clickJs(kind: String): String = """
+(function() {
+  var kind = '$kind';
+  function click(el) {
+    if (!el) return false;
+    var btn = el.closest('button') || el.closest('[role="button"]') || el;
+    btn.click();
+    return true;
+  }
+  function byLabel(re) {
+    var nodes = document.querySelectorAll('button, [role="button"], [data-tab], [aria-label], [title]');
+    for (var i = 0; i < nodes.length; i++) {
+      var a = (nodes[i].getAttribute('aria-label') || '') + ' ' + (nodes[i].getAttribute('title') || '');
+      if (re.test(a)) return click(nodes[i]);
+    }
+    var icons = document.querySelectorAll('[data-icon]');
+    for (var j = 0; j < icons.length; j++) {
+      var name = icons[j].getAttribute('data-icon') || '';
+      if (re.test(name)) return click(icons[j]);
+    }
+    return false;
+  }
+  if (kind === 'search') {
+    return byLabel(/search/i);
+  }
+  if (kind === 'new-chat') {
+    return byLabel(/new chat|new-chat|new-chat-outline/i);
+  }
+  return false;
+})();
+""".trimIndent()
+
+/**
+ * Closes the open conversation back to the chat list. WhatsApp Web marks an
+ * open thread with `#main`; the mobile back-to-list control lives in its
+ * header. Escape is the desktop fallback when that button is not in the DOM.
+ */
+private const val CLOSE_CHAT_JS = """
+(function() {
+  var main = document.querySelector('#main');
+  if (!main) return false;
+  var back = main.querySelector('header [aria-label="Back"]')
+    || main.querySelector('header [data-icon="back"]')
+    || document.querySelector('[data-icon="back"]');
+  if (back) { (back.closest('button') || back).click(); return true; }
+  var esc = new KeyboardEvent('keydown', {key:'Escape', keyCode:27, which:27, bubbles:true});
+  document.dispatchEvent(esc);
+  document.body && document.body.dispatchEvent(esc);
+  return !document.querySelector('#main');
+})();
+"""
 
 /**
  * Reads the login QR out of the page. WhatsApp keeps the payload the phone has to
@@ -247,6 +399,7 @@ class SessionController(context: Context) {
     val linkState: StateFlow<LinkState> = _linkState.asStateFlow()
     val callbacks = SessionCallbacks()
     private var bouncedToWebClient = false
+    private var darkMode = false
 
     @SuppressLint("SetJavaScriptEnabled")
     val webView: WebView = WebView(appContext).apply {
@@ -257,16 +410,16 @@ class SessionController(context: Context) {
         settings.loadsImagesAutomatically = true
         settings.mediaPlaybackRequiresUserGesture = false
         settings.javaScriptCanOpenWindowsAutomatically = false
-        // WhatsApp Web ships `width=device-width` and lays its login QR out responsively,
-        // so the page's own viewport is honoured as-is. Forcing a desktop-width viewport
-        // or an initial scale here parks the centred QR off-screen.
+        // Desktop-width viewport (injected in LAYOUT_FIX_JS) + overview mode scales
+        // the desktop shell to the phone screen. The native QR overlay stays readable.
         settings.useWideViewPort = true
-        settings.loadWithOverviewMode = false
+        settings.loadWithOverviewMode = true
         settings.builtInZoomControls = true
         settings.displayZoomControls = false
         settings.setSupportZoom(true)
         // Ignore the system font scale; at large scales WhatsApp's layout pushes the QR away.
-        settings.textZoom = 100
+        // Flavor fallback is 140%; the saved preference overrides this after prefs load.
+        settings.textZoom = BuildConfig.WEB_TEXT_ZOOM
         settings.cacheMode = WebSettings.LOAD_DEFAULT
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         settings.userAgentString = DESKTOP_UA
@@ -280,13 +433,26 @@ class SessionController(context: Context) {
         }
         isFocusable = true
         isFocusableInTouchMode = true
+        ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            if (ime.bottom > 0) {
+                v.post {
+                    evaluateJavascript(
+                        "window.__relayRevealComposer && window.__relayRevealComposer()",
+                        null,
+                    )
+                }
+            }
+            insets
+        }
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             WebViewCompat.addDocumentStartJavaScript(this, DESKTOP_SPOOF_JS, setOf("*"))
+            WebViewCompat.addDocumentStartJavaScript(this, THEME_BOOTSTRAP_JS, setOf("*"))
             WebViewCompat.addDocumentStartJavaScript(this, LAYOUT_FIX_JS, setOf("*"))
-            WebViewCompat.addDocumentStartJavaScript(this, PHONE_UI_JS, setOf("*"))
+            WebViewCompat.addDocumentStartJavaScript(this, KEYBOARD_JS, setOf("*"))
         }
 
         webViewClient = object : WebViewClient() {
@@ -329,9 +495,11 @@ class SessionController(context: Context) {
                 _linkState.value = LinkState.None
                 if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
                     view?.evaluateJavascript(DESKTOP_SPOOF_JS, null)
+                    view?.evaluateJavascript(THEME_BOOTSTRAP_JS, null)
                     view?.evaluateJavascript(LAYOUT_FIX_JS, null)
-                    view?.evaluateJavascript(PHONE_UI_JS, null)
+                    view?.evaluateJavascript(KEYBOARD_JS, null)
                 }
+                view?.evaluateJavascript(themeJs(darkMode), null)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -348,7 +516,8 @@ class SessionController(context: Context) {
                 _progress.value = 100
                 _pageReady.value = true
                 view?.evaluateJavascript(LAYOUT_FIX_JS, null)
-                view?.evaluateJavascript(PHONE_UI_JS, null)
+                view?.evaluateJavascript(KEYBOARD_JS, null)
+                view?.evaluateJavascript(themeJs(darkMode), null)
             }
 
             override fun onReceivedError(
@@ -418,8 +587,71 @@ class SessionController(context: Context) {
         }
     }
 
+    suspend fun isChatOpen(): Boolean {
+        val raw = withTimeoutOrNull(500) {
+            evaluate(
+                "(function(){var b=document.body;if(b&&b.classList.contains('relay-chat'))return true;" +
+                    "var m=document.querySelector('#main');if(!m)return false;" +
+                    "return !!(m.querySelector('footer [contenteditable=\"true\"]')||" +
+                    "m.querySelector('[data-testid=\"conversation-compose-box-input\"]')||" +
+                    "m.querySelector('header img'));})()",
+            )
+        }
+        return raw?.trim('"') == "true"
+    }
+
+    /** Closes the open conversation. Returns true if a chat was open and got closed. */
+    suspend fun closeChat(): Boolean {
+        val raw = withTimeoutOrNull(600) { evaluate(CLOSE_CHAT_JS) } ?: return false
+        return raw == "true"
+    }
+
     fun reload() {
         webView.reload()
+    }
+
+    fun setTextZoom(percent: Int) {
+        val zoom = percent.coerceIn(100, 225)
+        webView.post { webView.settings.textZoom = zoom }
+    }
+
+    fun setDarkMode(dark: Boolean) {
+        darkMode = dark
+        applyAlgorithmicDarkening(dark)
+        val bg = if (dark) Color.parseColor("#0B141A") else Color.WHITE
+        webView.post {
+            webView.setBackgroundColor(bg)
+            webView.evaluateJavascript(themeJs(dark), null)
+        }
+    }
+
+    private fun applyAlgorithmicDarkening(dark: Boolean) {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+            WebSettingsCompat.setAlgorithmicDarkeningAllowed(webView.settings, dark)
+        }
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+            @Suppress("DEPRECATION")
+            WebSettingsCompat.setForceDark(
+                webView.settings,
+                if (dark) WebSettingsCompat.FORCE_DARK_ON else WebSettingsCompat.FORCE_DARK_OFF,
+            )
+        }
+    }
+
+    fun revealComposer() {
+        webView.evaluateJavascript(KEYBOARD_JS, null)
+        webView.evaluateJavascript(
+            "window.__relayRevealComposer && window.__relayRevealComposer()",
+            null,
+        )
+    }
+
+    fun clickSearch() {
+        webView.evaluateJavascript(clickJs("search"), null)
+    }
+
+    fun clickNewChat() {
+        webView.evaluateJavascript(clickJs("new-chat"), null)
     }
 
     /**
@@ -434,7 +666,7 @@ class SessionController(context: Context) {
         _linkState.value = when (json.optString("state")) {
             "linked" -> {
                 webView.evaluateJavascript(LAYOUT_FIX_JS, null)
-                webView.evaluateJavascript(PHONE_UI_JS, null)
+                webView.evaluateJavascript(KEYBOARD_JS, null)
                 LinkState.Linked
             }
             "qr" -> LinkState.Qr(

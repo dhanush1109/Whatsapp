@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "app.relay.companion"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "app.relay.companion"
@@ -18,6 +18,22 @@ android {
 
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    flavorDimensions += "line"
+    productFlavors {
+        create("v1") {
+            dimension = "line"
+            versionName = "1.0.0"
+            buildConfigField("int", "WEB_TEXT_ZOOM", "140")
+        }
+        create("v2") {
+            dimension = "line"
+            applicationIdSuffix = ".v2"
+            versionCode = 2
+            versionName = "2.0.0"
+            buildConfigField("int", "WEB_TEXT_ZOOM", "140")
+        }
     }
 
     buildTypes {

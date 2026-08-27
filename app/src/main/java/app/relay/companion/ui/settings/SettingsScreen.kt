@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +31,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -45,6 +48,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.relay.companion.BuildConfig
 import app.relay.companion.R
@@ -78,8 +84,9 @@ fun SettingsScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .statusBarsPadding()
             .padding(horizontal = Spacing.lg)
-            .padding(top = Spacing.lg, bottom = Spacing.xl),
+            .padding(top = Spacing.sm, bottom = Spacing.xl),
         verticalArrangement = Arrangement.spacedBy(Spacing.lg),
     ) {
         ScreenHeader(title = stringResource(R.string.settings_title))
@@ -151,6 +158,63 @@ fun SettingsScreen(
                             scope.launch { repo.setHapticsEnabled(checked) }
                         },
                     )
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_text_size)) },
+                supportingContent = { Text(stringResource(R.string.settings_text_size_body)) },
+                trailingContent = {
+                    val decreaseLabel = stringResource(R.string.settings_text_size_decrease)
+                    val increaseLabel = stringResource(R.string.settings_text_size_increase)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = {
+                                val next = (settings.webTextZoom - PreferencesRepository.WEB_TEXT_ZOOM_STEP)
+                                    .coerceAtLeast(PreferencesRepository.WEB_TEXT_ZOOM_MIN)
+                                if (next != settings.webTextZoom) {
+                                    haptics.perform(RelayHapticEvent.Tick)
+                                    scope.launch { repo.setWebTextZoom(next) }
+                                }
+                            },
+                            enabled = settings.webTextZoom > PreferencesRepository.WEB_TEXT_ZOOM_MIN,
+                            modifier = Modifier.semantics {
+                                contentDescription = decreaseLabel
+                            },
+                        ) {
+                            Text(
+                                text = "A−",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.settings_text_size_value, settings.webTextZoom),
+                            style = MaterialTheme.typography.titleMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.widthIn(min = 48.dp),
+                        )
+                        IconButton(
+                            onClick = {
+                                val next = (settings.webTextZoom + PreferencesRepository.WEB_TEXT_ZOOM_STEP)
+                                    .coerceAtMost(PreferencesRepository.WEB_TEXT_ZOOM_MAX)
+                                if (next != settings.webTextZoom) {
+                                    haptics.perform(RelayHapticEvent.Tick)
+                                    scope.launch { repo.setWebTextZoom(next) }
+                                }
+                            },
+                            enabled = settings.webTextZoom < PreferencesRepository.WEB_TEXT_ZOOM_MAX,
+                            modifier = Modifier.semantics {
+                                contentDescription = increaseLabel
+                            },
+                        ) {
+                            Text(
+                                text = "A+",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )

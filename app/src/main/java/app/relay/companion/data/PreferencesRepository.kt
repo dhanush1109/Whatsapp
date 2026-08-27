@@ -3,6 +3,7 @@ package app.relay.companion.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -13,12 +14,19 @@ private val Context.dataStore by preferencesDataStore(name = "relay_settings")
 
 enum class ThemePreference { System, Light, Dark }
 
+fun ThemePreference.resolveDark(systemDark: Boolean): Boolean = when (this) {
+    ThemePreference.System -> systemDark
+    ThemePreference.Light -> false
+    ThemePreference.Dark -> true
+}
+
 data class RelaySettings(
     val theme: ThemePreference = ThemePreference.System,
     val lockEnabled: Boolean = false,
     val hasPin: Boolean = false,
     val statusTreeUri: String? = null,
     val hapticsEnabled: Boolean = true,
+    val webTextZoom: Int = PreferencesRepository.WEB_TEXT_ZOOM_DEFAULT,
 )
 
 class PreferencesRepository(private val context: Context) {
@@ -29,6 +37,7 @@ class PreferencesRepository(private val context: Context) {
     private val pinSaltKey = stringPreferencesKey("pin_salt")
     private val treeKey = stringPreferencesKey("status_tree_uri")
     private val hapticsKey = booleanPreferencesKey("haptics_enabled")
+    private val webTextZoomKey = intPreferencesKey("web_text_zoom")
 
     val settings: Flow<RelaySettings> = context.dataStore.data.map { prefs ->
         RelaySettings(
@@ -38,6 +47,8 @@ class PreferencesRepository(private val context: Context) {
             hasPin = !prefs[pinHashKey].isNullOrBlank(),
             statusTreeUri = prefs[treeKey],
             hapticsEnabled = prefs[hapticsKey] != false,
+            webTextZoom = (prefs[webTextZoomKey] ?: WEB_TEXT_ZOOM_DEFAULT)
+                .coerceIn(WEB_TEXT_ZOOM_MIN, WEB_TEXT_ZOOM_MAX),
         )
     }
 
@@ -47,6 +58,12 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setHapticsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[hapticsKey] = enabled }
+    }
+
+    suspend fun setWebTextZoom(zoom: Int) {
+        context.dataStore.edit {
+            it[webTextZoomKey] = zoom.coerceIn(WEB_TEXT_ZOOM_MIN, WEB_TEXT_ZOOM_MAX)
+        }
     }
 
     suspend fun setLockEnabled(enabled: Boolean) {
@@ -86,6 +103,12 @@ class PreferencesRepository(private val context: Context) {
     }
 
     companion object {
+        const val WEB_TEXT_ZOOM_MIN = 100
+        const val WEB_TEXT_ZOOM_MAX = 225
+        const val WEB_TEXT_ZOOM_STEP = 10
+        const val WEB_TEXT_ZOOM_DEFAULT = 140
+        const val WEB_CHAT_ZOOM = 225
+
         fun hashPin(pin: String, salt: String): String {
             val digest = java.security.MessageDigest.getInstance("SHA-256")
             val bytes = digest.digest("$salt:$pin".toByteArray(Charsets.UTF_8))

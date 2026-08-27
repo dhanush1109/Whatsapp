@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -14,6 +15,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -22,6 +24,7 @@ import androidx.compose.ui.res.stringResource
 import app.relay.companion.R
 import app.relay.companion.data.PreferencesRepository
 import app.relay.companion.data.ThemePreference
+import app.relay.companion.data.resolveDark
 import app.relay.companion.ui.session.SessionPane
 import app.relay.companion.ui.theme.RelayTheme
 import kotlinx.coroutines.flow.map
@@ -38,6 +41,12 @@ class Session2Activity : ComponentActivity() {
         sessionViewModel.controller.loadHome()
         setContent {
             val theme by prefs.settings.map { it.theme }.collectAsState(initial = ThemePreference.System)
+            val webTextZoom by prefs.settings.map { it.webTextZoom }
+                .collectAsState(initial = PreferencesRepository.WEB_TEXT_ZOOM_DEFAULT)
+            val dark = theme.resolveDark(isSystemInDarkTheme())
+            LaunchedEffect(dark) {
+                sessionViewModel.controller.setDarkMode(dark)
+            }
             RelayTheme(themePreference = theme) {
                 BackHandler {
                     if (!sessionViewModel.controller.goBack()) finish()
@@ -60,6 +69,8 @@ class Session2Activity : ComponentActivity() {
                 ) { padding ->
                     SessionPane(
                         controller = sessionViewModel.controller,
+                        listTextZoom = webTextZoom,
+                        darkTheme = dark,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(padding),

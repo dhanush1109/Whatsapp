@@ -24,6 +24,7 @@
     <string name="session_link_waiting">Waiting for a code from WhatsApp Web</string>
     <string name="session_opening">Opening WhatsApp Web</string>
     <string name="session_opening_body">Keep this screen open while your chats load.</string>
+    <string name="session_encrypted">End-to-end encrypted</string>
     <string name="cd_link_qr">QR code for linking this device to WhatsApp</string>
 
     <string name="direct_title">New chat</string>
@@ -78,6 +79,11 @@
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_haptics">Haptics</string>
     <string name="settings_haptics_body">Feel subtle vibrations for taps, saves, and errors.</string>
+    <string name="settings_text_size">Chat text size</string>
+    <string name="settings_text_size_body">Makes WhatsApp Web text larger or smaller in this app.</string>
+    <string name="settings_text_size_value">%d%%</string>
+    <string name="settings_text_size_decrease">Decrease chat text size</string>
+    <string name="settings_text_size_increase">Increase chat text size</string>
     <string name="settings_privacy">Privacy</string>
     <string name="settings_lock">App lock</string>
     <string name="settings_lock_body">Require a PIN, with biometrics when the device supports them, before anyone can open your live session.</string>
@@ -106,6 +112,9 @@
     <string name="cd_back">Back</string>
     <string name="cd_close">Close</string>
     <string name="cd_reload">Reload session</string>
+    <string name="cd_search">Search chats</string>
+    <string name="cd_new_chat">New chat</string>
+    <string name="cd_more">More options</string>
     <string name="cd_second_session">Open second session</string>
     <string name="cd_qr_preview">Generated QR code</string>
     <string name="cd_save_media">Save this file</string>
