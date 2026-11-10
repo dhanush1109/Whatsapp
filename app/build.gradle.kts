@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "app.relay.companion"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "app.relay.companion"
@@ -25,14 +25,14 @@ android {
         create("v1") {
             dimension = "line"
             versionName = "1.0.0"
-            buildConfigField("int", "WEB_TEXT_ZOOM", "140")
+            buildConfigField("int", "WEB_TEXT_ZOOM", "125")
         }
         create("v2") {
             dimension = "line"
             applicationIdSuffix = ".v2"
             versionCode = 2
             versionName = "2.0.0"
-            buildConfigField("int", "WEB_TEXT_ZOOM", "140")
+            buildConfigField("int", "WEB_TEXT_ZOOM", "125")
         }
     }
 
@@ -98,6 +98,7 @@ dependencies {
     implementation(libs.mlkit.barcode.scanning)
 
     implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.webkit)
     implementation(libs.zxing.core)

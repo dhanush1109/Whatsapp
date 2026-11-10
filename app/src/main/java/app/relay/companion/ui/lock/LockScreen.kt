@@ -1,11 +1,10 @@
 package app.relay.companion.ui.lock
 
-import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
-import androidx.biometric.BiometricPrompt
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.keyframes
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -24,10 +24,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,7 +47,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import app.relay.companion.R
 import app.relay.companion.data.PreferencesRepository
@@ -62,6 +61,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun LockScreen(
     repo: PreferencesRepository,
+    hasPin: Boolean,
+    biometricEnabled: Boolean,
     onUnlocked: () -> Unit,
     modifier: Modifier = Modifier,
     hapticsEnabled: Boolean = true,
@@ -75,41 +76,44 @@ fun LockScreen(
     var error by remember { mutableStateOf(false) }
     var unlocking by remember { mutableStateOf(false) }
     val shake = remember { Animatable(0f) }
-    val canBio = remember(activity) {
-        activity != null &&
-            BiometricManager.from(context).canAuthenticate(BIOMETRIC_WEAK) ==
-            BiometricManager.BIOMETRIC_SUCCESS
+
+    val bioReady = remember(activity, biometricEnabled) {
+        biometricEnabled && activity != null &&
+            BiometricAuth.availability(context) == BiometricAvailability.Ready
     }
-    val biometricTitle = stringResource(R.string.lock_biometric_title)
-    val biometricSubtitle = stringResource(R.string.lock_biometric_subtitle)
-    val cancel = stringResource(R.string.lock_cancel)
+    val bioKind = remember { BiometricAuth.kind(context) }
+    // Whether the PIN entry is the only way in (no usable biometrics).
+    val pinOnly = hasPin && !bioReady
+
+    val title = stringResource(R.string.lock_biometric_title)
+    val subtitle = stringResource(R.string.lock_biometric_subtitle)
+    val negative = if (hasPin) stringResource(R.string.lock_use_pin) else stringResource(R.string.lock_cancel)
+    val bioButtonLabel = when (bioKind) {
+        BiometricKind.Face -> stringResource(R.string.lock_unlock_face)
+        BiometricKind.Fingerprint -> stringResource(R.string.lock_unlock_fingerprint)
+        BiometricKind.Generic -> stringResource(R.string.lock_use_biometric)
+    }
+
+    fun succeed() {
+        haptics.perform(RelayHapticEvent.Confirm)
+        unlocking = true
+    }
 
     fun promptBio() {
         val host = activity ?: return
-        val prompt = BiometricPrompt(
-            host,
-            ContextCompat.getMainExecutor(host),
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    haptics.perform(RelayHapticEvent.Confirm)
-                    unlocking = true
-                }
-            },
+        BiometricAuth.prompt(
+            activity = host,
+            title = title,
+            subtitle = subtitle,
+            negativeText = negative,
+            onSuccess = { succeed() },
         )
-        val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(biometricTitle)
-            .setSubtitle(biometricSubtitle)
-            .setNegativeButtonText(cancel)
-            .setAllowedAuthenticators(BIOMETRIC_WEAK)
-            .build()
-        prompt.authenticate(info)
     }
 
     fun unlock() {
         scope.launch {
             if (repo.verifyPin(pin)) {
-                haptics.perform(RelayHapticEvent.Confirm)
-                unlocking = true
+                succeed()
             } else {
                 haptics.perform(RelayHapticEvent.Reject)
                 error = true
@@ -117,8 +121,9 @@ fun LockScreen(
         }
     }
 
-    LaunchedEffect(canBio) {
-        if (canBio) promptBio()
+    // Auto-prompt biometrics on entry so unlock is a single glance/touch.
+    LaunchedEffect(bioReady) {
+        if (bioReady) promptBio()
     }
 
     LaunchedEffect(error) {
@@ -176,13 +181,26 @@ fun LockScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_lock),
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.height(Spacing.md))
+            val glyph = if (bioReady && bioKind == BiometricKind.Fingerprint) {
+                R.drawable.ic_fingerprint
+            } else {
+                R.drawable.ic_lock
+            }
+            Column(
+                modifier = Modifier
+                    .size(96.dp)
+                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    painter = painterResource(glyph),
+                    contentDescription = null,
+                    modifier = Modifier.size(44.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            Spacer(Modifier.height(Spacing.lg))
             Text(
                 text = stringResource(R.string.lock_title),
                 style = MaterialTheme.typography.headlineSmall,
@@ -190,46 +208,83 @@ fun LockScreen(
             )
             Spacer(Modifier.height(Spacing.sm))
             Text(
-                text = stringResource(R.string.lock_body),
+                text = stringResource(
+                    if (bioReady) R.string.lock_body_biometric else R.string.lock_body,
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(Spacing.lg))
-            OutlinedTextField(
-                value = pin,
-                onValueChange = {
-                    pin = it.filter(Char::isDigit).take(6)
-                    error = false
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .offset(x = shake.value.dp),
-                label = { Text(stringResource(R.string.lock_pin_label)) },
-                isError = error,
-                supportingText = {
-                    if (error) Text(stringResource(R.string.lock_error))
-                },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.NumberPassword,
-                    imeAction = ImeAction.Done,
-                ),
-                keyboardActions = KeyboardActions(onDone = { unlock() }),
-                singleLine = true,
-            )
-            Spacer(Modifier.height(Spacing.md))
-            Button(
-                onClick = { unlock() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(Spacing.touch),
-                shape = RoundedCornerShape(Spacing.buttonRadius),
-            ) {
-                Text(stringResource(R.string.lock_unlock))
+
+            if (bioReady) {
+                Button(
+                    onClick = { promptBio() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(Spacing.touch),
+                    shape = RoundedCornerShape(Spacing.buttonRadius),
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            if (bioKind == BiometricKind.Fingerprint) R.drawable.ic_fingerprint else R.drawable.ic_lock,
+                        ),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.size(Spacing.sm))
+                    Text(bioButtonLabel)
+                }
             }
-            if (canBio) {
-                TextButton(onClick = { promptBio() }) {
-                    Text(stringResource(R.string.lock_use_biometric))
+
+            // PIN entry: shown as the primary control when there are no biometrics,
+            // and as a fallback (revealed) when biometrics are the primary method.
+            AnimatedVisibility(visible = hasPin) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (bioReady) Spacer(Modifier.height(Spacing.md))
+                    OutlinedTextField(
+                        value = pin,
+                        onValueChange = {
+                            pin = it.filter(Char::isDigit).take(6)
+                            error = false
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .offset(x = shake.value.dp),
+                        label = { Text(stringResource(R.string.lock_pin_label)) },
+                        isError = error,
+                        supportingText = {
+                            if (error) Text(stringResource(R.string.lock_error))
+                        },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.NumberPassword,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { unlock() }),
+                        singleLine = true,
+                    )
+                    Spacer(Modifier.height(Spacing.md))
+                    if (pinOnly) {
+                        Button(
+                            onClick = { unlock() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(Spacing.touch),
+                            shape = RoundedCornerShape(Spacing.buttonRadius),
+                        ) {
+                            Text(stringResource(R.string.lock_unlock))
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { unlock() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(Spacing.touch),
+                            shape = RoundedCornerShape(Spacing.buttonRadius),
+                        ) {
+                            Text(stringResource(R.string.lock_unlock))
+                        }
+                    }
                 }
             }
         }

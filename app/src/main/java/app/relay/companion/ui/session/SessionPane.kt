@@ -91,6 +91,7 @@ fun SessionPane(
     var preferWebPage by remember { mutableStateOf(false) }
     var sawQr by remember { mutableStateOf(false) }
     var inChat by remember { mutableStateOf(false) }
+    var everLinked by remember { mutableStateOf(false) }
 
     val fileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
@@ -186,7 +187,10 @@ fun SessionPane(
     LaunchedEffect(linkState) {
         when (linkState) {
             is LinkState.Qr -> sawQr = true
-            LinkState.Linked -> sawQr = false
+            LinkState.Linked -> {
+                sawQr = false
+                everLinked = true
+            }
             else -> Unit
         }
     }
@@ -317,6 +321,9 @@ fun SessionPane(
                     factory = {
                         controller.webView.apply {
                             (parent as? ViewGroup)?.removeView(this)
+                            setBackgroundColor(
+                                if (dark) 0xFF0B141A.toInt() else android.graphics.Color.WHITE,
+                            )
                         }
                     },
                     update = { webView ->
@@ -330,7 +337,14 @@ fun SessionPane(
                 )
             }
 
-            val showLoading = (!hasLoadedOnce && !showLinkCard) || showOpening
+            // Keep the themed overlay up through WhatsApp's own "Loading your
+            // chats… %" sync splash, which paints an un-themed near-white page
+            // after onPageFinished but before the list is linked. Dismiss only
+            // once the list is actually up (Linked), a chat is open, or the QR
+            // card takes over — otherwise a white flash leaks in dark mode.
+            // everLinked latches so a transient None poll can't re-show it.
+            val linked = everLinked || linkState is LinkState.Linked || inChat
+            val showLoading = (!linked && !showLinkCard && !sawQr) || showOpening
             androidx.compose.animation.AnimatedVisibility(
                 visible = refreshing && !showLoading && progress in 1..99,
                 enter = fadeIn(Motion.defaultEffectsSpec()),

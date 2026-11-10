@@ -4,7 +4,6 @@ import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.os.Bundle
 import android.view.View
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -13,10 +12,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.animation.doOnEnd
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.fragment.app.FragmentActivity
 import app.relay.companion.session.SessionViewModel
 import app.relay.companion.ui.shell.RelayRoot
 
-class MainActivity : ComponentActivity() {
+// FragmentActivity (not ComponentActivity) is required so BiometricPrompt can
+// attach its system dialog; androidx.biometric hosts the prompt in a fragment.
+class MainActivity : FragmentActivity() {
 
     private val sessionViewModel: SessionViewModel by viewModels()
 

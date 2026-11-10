@@ -86,7 +86,11 @@
     <string name="settings_text_size_increase">Increase chat text size</string>
     <string name="settings_privacy">Privacy</string>
     <string name="settings_lock">App lock</string>
-    <string name="settings_lock_body">Require a PIN, with biometrics when the device supports them, before anyone can open your live session.</string>
+    <string name="settings_lock_body">Require a PIN or biometrics before anyone can open your live session.</string>
+    <string name="settings_biometric">Unlock with biometrics</string>
+    <string name="settings_biometric_body">Use fingerprint or Face ID to open the app.</string>
+    <string name="settings_biometric_not_enrolled">No fingerprint or face is set up. Add one in your device settings first.</string>
+    <string name="settings_biometric_error">Biometrics aren\'t available on this device.</string>
     <string name="settings_set_pin">Set PIN</string>
     <string name="settings_change_pin">Change PIN</string>
     <string name="settings_session">Session</string>
@@ -97,9 +101,13 @@
 
     <string name="lock_title">Unlock WhatsApp</string>
     <string name="lock_body">Your web session is protected on this device.</string>
+    <string name="lock_body_biometric">Use your fingerprint or face to unlock.</string>
     <string name="lock_pin_label">PIN</string>
     <string name="lock_unlock">Unlock</string>
     <string name="lock_use_biometric">Use biometrics</string>
+    <string name="lock_use_pin">Use PIN</string>
+    <string name="lock_unlock_face">Unlock with Face ID</string>
+    <string name="lock_unlock_fingerprint">Unlock with fingerprint</string>
     <string name="lock_error">That PIN does not match.</string>
     <string name="lock_pin_helper">Choose 4 to 6 digits. This stays on the device.</string>
     <string name="lock_pin_mismatch">PINs do not match.</string>

@@ -117,6 +117,21 @@ private val LAYOUT_FIX_JS = """
     'html body.relay-chat .two > [data-relay="main-wrap"]{flex:1 1 100% !important;width:100% !important;height:100% !important;transform:none !important;overflow:hidden !important;}',
     'html body.relay-chat #main{transform:none !important;flex:none !important;position:fixed !important;top:0 !important;left:0 !important;right:auto !important;bottom:auto !important;width:100% !important;height:100% !important;min-width:0 !important;max-width:none !important;}',
     'html body.relay-chat #main [role="button"],html body.relay-chat #main button{min-width:0 !important;}',
+    // Media (photos, videos, GIFs, stickers, doc/audio cards, link previews) is
+    // laid out by WhatsApp at fixed pixel widths that assume a wide desktop
+    // column. In our narrow device-width chat those overshoot #main's
+    // overflow:hidden and get clipped on the right — text bubbles wrap fine but
+    // media ends vanish. Clamp every media surface and its message column to the
+    // bubble width so nothing exceeds the viewport (ui-ux-pro-max image-dimension
+    // / content-jumping; Apple HIG: content must never be clipped off-screen).
+    'html body.relay-chat #main [data-id]{max-width:100% !important;}',
+    'html body.relay-chat #main [data-id] > div{max-width:100% !important;}',
+    'html body.relay-chat #main img,html body.relay-chat #main video,html body.relay-chat #main canvas{max-width:100% !important;height:auto !important;}',
+    'html body.relay-chat #main [data-testid="media-content"],html body.relay-chat #main [aria-label="Open picture"],html body.relay-chat #main [aria-label="Open video"]{max-width:100% !important;}',
+    // Document / audio / link-preview cards carry a min-width that forces overflow
+    // in the narrow column; drop it and let them shrink to the bubble.
+    'html body.relay-chat #main [role="row"] [role="button"],html body.relay-chat #main [data-icon="audio-file"],html body.relay-chat #main [data-icon="document"]{min-width:0 !important;max-width:100% !important;}',
+    'html body.relay-chat #main [role="row"]{max-width:100% !important;box-sizing:border-box !important;}',
     'body.relay-chat .two > *:not([data-relay="main-wrap"]):not(#wds-toast-container){display:none !important;}',
     'body.relay-list [data-relay="pane-wrap"]{flex:1 1 100% !important;width:100% !important;}',
     'body.relay-list .two > *:not([data-relay="pane-wrap"]):not(#wds-toast-container){display:none !important;}',
@@ -130,7 +145,14 @@ private val LAYOUT_FIX_JS = """
     // properties on the light values. Remap the key WDS tokens to WA's dark palette
     // so panels and text are legible in dark mode.
     'html.relay-dark,html.relay-dark body{color-scheme:dark !important;--panel-background:#111b21 !important;--panel-background-deep:#0b141a !important;--panel-input-background:#2a3942 !important;--picker-background:#233138 !important;--app-background:#0b141a !important;--app-background-deeper:#000000 !important;--avatar-background:#6a7175 !important;--icon-in-cell-frame-background:#202c33 !important;--navbar-background:#202c33 !important;--WDS-surface-default:#111b21 !important;--WDS-surface-default-RGB:17,27,33 !important;--WDS-surface-elevated-default:#202c33 !important;--WDS-surface-elevated-emphasized:#2a3942 !important;--WDS-background-wash-plain:#0b141a !important;--WDS-background-wash-plain-RGB:11,20,26 !important;--WDS-background-elevated-wash-plain-RGB:32,44,51 !important;--WDS-systems-chat-surface-composer:#202c33 !important;--WDS-systems-chat-surface-composer-RGB:32,44,51 !important;--WDS-systems-chat-surface-tray:#202c33 !important;--WDS-systems-chat-background-wallpaper:#0b141a !important;--WDS-systems-bubble-surface-incoming:#202c33 !important;--WDS-systems-bubble-surface-outgoing:#005c4b !important;--WDS-components-surface-nav-bar:#202c33 !important;--WDS-components-profile-photo-surface-gray:#2a3942 !important;--button-round-background-inverted:#2a3942 !important;--product-placeholder-background:#202c33 !important;--bot-command-pill-background-color:#202c33 !important;}',
-    'html.relay-dark,html.relay-dark body{--primary:#e9edef !important;--primary-strong:#e9edef !important;--primary-stronger:#e9edef !important;--primary-strong-rgb:233,237,239 !important;--primary-stronger-rgb:233,237,239 !important;--message-primary:#e9edef !important;--message-primary-rgb:233,237,239 !important;--WDS-content-default:#E9EDEF !important;--WDS-content-action-default:#E9EDEF !important;--text-primary-strong:#e9edef !important;--modal-title:#e9edef !important;--status-link-preview-title:#e9edef !important;--secondary:#8696a0 !important;--secondary-lighter:#8696a0 !important;--typography-sub-title:#8696a0 !important;--labels-icon:rgba(233,237,239,.6) !important;--block-quote-text:rgba(233,237,239,.7) !important;--WDS-systems-bubble-surface-system:rgba(32,44,51,.92) !important;--WDS-systems-bubble-surface-system-RGB:32,44,51 !important;--system-message-background-color:rgba(32,44,51,.92) !important;}'
+    'html.relay-dark,html.relay-dark body{--primary:#e9edef !important;--primary-strong:#e9edef !important;--primary-stronger:#e9edef !important;--primary-strong-rgb:233,237,239 !important;--primary-stronger-rgb:233,237,239 !important;--message-primary:#e9edef !important;--message-primary-rgb:233,237,239 !important;--WDS-content-default:#E9EDEF !important;--WDS-content-action-default:#E9EDEF !important;--text-primary-strong:#e9edef !important;--modal-title:#e9edef !important;--status-link-preview-title:#e9edef !important;--secondary:#8696a0 !important;--secondary-lighter:#8696a0 !important;--typography-sub-title:#8696a0 !important;--labels-icon:rgba(233,237,239,.6) !important;--block-quote-text:rgba(233,237,239,.7) !important;--WDS-systems-bubble-surface-system:rgba(32,44,51,.92) !important;--WDS-systems-bubble-surface-system-RGB:32,44,51 !important;--system-message-background-color:rgba(32,44,51,.92) !important;}',
+    // Chat-list preview/timestamp text is driven by these WDS "content" tokens,
+    // which WhatsApp leaves at the light-theme near-black even in dark mode. Left
+    // unmapped they render as invisible black-on-dark. Point them at WA's own dark
+    // secondary grey (#8696a0) so previews read like the real app. The system
+    // bubble tokens do the same for in-chat system messages ("You changed the
+    // group name", E2E notice) whose pills are dark but whose text stayed black.
+    'html.relay-dark,html.relay-dark body{--WDS-content-deemphasized:#8696a0 !important;--WDS-content-secondary:#8696a0 !important;--WDS-content-secondary-RGB:134,150,160 !important;--WDS-content-disabled:rgba(134,150,160,.6) !important;--WDS-systems-bubble-content-default:#e9edef !important;--WDS-systems-bubble-content-deemphasized:rgba(233,237,239,.75) !important;--WDS-systems-bubble-content-deemphasized-RGB:233,237,239 !important;}'
   ].join('');
   function viewport() {
     var m = document.querySelector('meta[name="viewport"]');

@@ -24,6 +24,7 @@ data class RelaySettings(
     val theme: ThemePreference = ThemePreference.System,
     val lockEnabled: Boolean = false,
     val hasPin: Boolean = false,
+    val biometricEnabled: Boolean = false,
     val statusTreeUri: String? = null,
     val hapticsEnabled: Boolean = true,
     val webTextZoom: Int = PreferencesRepository.WEB_TEXT_ZOOM_DEFAULT,
@@ -35,16 +36,23 @@ class PreferencesRepository(private val context: Context) {
     private val lockKey = booleanPreferencesKey("lock_enabled")
     private val pinHashKey = stringPreferencesKey("pin_hash")
     private val pinSaltKey = stringPreferencesKey("pin_salt")
+    private val biometricKey = booleanPreferencesKey("biometric_enabled")
     private val treeKey = stringPreferencesKey("status_tree_uri")
     private val hapticsKey = booleanPreferencesKey("haptics_enabled")
     private val webTextZoomKey = intPreferencesKey("web_text_zoom")
 
     val settings: Flow<RelaySettings> = context.dataStore.data.map { prefs ->
+        val hasPin = !prefs[pinHashKey].isNullOrBlank()
+        val biometricEnabled = prefs[biometricKey] == true
         RelaySettings(
             theme = runCatching { ThemePreference.valueOf(prefs[themeKey] ?: ThemePreference.System.name) }
                 .getOrDefault(ThemePreference.System),
-            lockEnabled = prefs[lockKey] == true && !prefs[pinHashKey].isNullOrBlank(),
-            hasPin = !prefs[pinHashKey].isNullOrBlank(),
+            // The lock screen can be satisfied by either a PIN or biometrics, so
+            // App Lock is considered on when the user turned it on and at least
+            // one unlock method is available.
+            lockEnabled = prefs[lockKey] == true && (hasPin || biometricEnabled),
+            hasPin = hasPin,
+            biometricEnabled = biometricEnabled,
             statusTreeUri = prefs[treeKey],
             hapticsEnabled = prefs[hapticsKey] != false,
             webTextZoom = (prefs[webTextZoomKey] ?: WEB_TEXT_ZOOM_DEFAULT)
@@ -67,7 +75,18 @@ class PreferencesRepository(private val context: Context) {
     }
 
     suspend fun setLockEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[lockKey] = enabled }
+        context.dataStore.edit {
+            it[lockKey] = enabled
+            if (!enabled) it[biometricKey] = false
+        }
+    }
+
+    suspend fun setBiometricEnabled(enabled: Boolean) {
+        context.dataStore.edit {
+            it[biometricKey] = enabled
+            // Turning on biometric unlock implies App Lock is on.
+            if (enabled) it[lockKey] = true
+        }
     }
 
     suspend fun setStatusTreeUri(uri: String?) {
@@ -98,7 +117,8 @@ class PreferencesRepository(private val context: Context) {
         context.dataStore.edit {
             it.remove(pinHashKey)
             it.remove(pinSaltKey)
-            it[lockKey] = false
+            // Only fully disable the lock if biometrics aren't the remaining method.
+            if (it[biometricKey] != true) it[lockKey] = false
         }
     }
 
@@ -106,8 +126,8 @@ class PreferencesRepository(private val context: Context) {
         const val WEB_TEXT_ZOOM_MIN = 100
         const val WEB_TEXT_ZOOM_MAX = 225
         const val WEB_TEXT_ZOOM_STEP = 10
-        const val WEB_TEXT_ZOOM_DEFAULT = 140
-        const val WEB_CHAT_ZOOM = 225
+        const val WEB_TEXT_ZOOM_DEFAULT = 125
+        const val WEB_CHAT_ZOOM = 130
 
         fun hashPin(pin: String, salt: String): String {
             val digest = java.security.MessageDigest.getInstance("SHA-256")

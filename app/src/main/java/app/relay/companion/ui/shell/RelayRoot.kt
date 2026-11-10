@@ -141,6 +141,8 @@ fun RelayRoot(
                 settings!!.lockEnabled && !unlocked -> {
                     LockScreen(
                         repo = repo,
+                        hasPin = settings!!.hasPin,
+                        biometricEnabled = settings!!.biometricEnabled,
                         onUnlocked = { unlocked = true },
                         hapticsEnabled = settings!!.hapticsEnabled,
                     )

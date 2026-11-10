@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -52,6 +53,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import app.relay.companion.BuildConfig
 import app.relay.companion.R
 import app.relay.companion.data.PreferencesRepository
@@ -59,6 +61,8 @@ import app.relay.companion.data.RelaySettings
 import app.relay.companion.data.ThemePreference
 import app.relay.companion.session.SessionController
 import app.relay.companion.ui.components.ScreenHeader
+import app.relay.companion.ui.lock.BiometricAuth
+import app.relay.companion.ui.lock.BiometricAvailability
 import app.relay.companion.ui.theme.Motion
 import app.relay.companion.ui.theme.RelayHapticEvent
 import app.relay.companion.ui.theme.Spacing
@@ -74,11 +78,46 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val haptics = rememberRelayHaptics(settings.hapticsEnabled)
     var pinDialog by remember { mutableStateOf(false) }
     var signOutDialog by remember { mutableStateOf(false) }
     var pin by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
+    var bioNotice by remember { mutableStateOf<String?>(null) }
+
+    val bioAvailability = remember { BiometricAuth.availability(context) }
+    val hasBiometricHardware = bioAvailability != BiometricAvailability.Unavailable
+    val bioTitle = stringResource(R.string.lock_biometric_title)
+    val bioSubtitle = stringResource(R.string.lock_biometric_subtitle)
+    val bioCancel = stringResource(R.string.lock_cancel)
+    val bioNotEnrolledMsg = stringResource(R.string.settings_biometric_not_enrolled)
+    val bioErrorMsg = stringResource(R.string.settings_biometric_error)
+
+    fun enrollBiometric() {
+        val activity = context as? FragmentActivity
+        if (activity == null || bioAvailability == BiometricAvailability.Unavailable) {
+            bioNotice = bioErrorMsg
+            return
+        }
+        if (bioAvailability == BiometricAvailability.NotEnrolled) {
+            bioNotice = bioNotEnrolledMsg
+            return
+        }
+        // Confirm the user can pass biometrics before we switch the toggle on,
+        // so we never leave them locked out behind a sensor that won't accept them.
+        BiometricAuth.prompt(
+            activity = activity,
+            title = bioTitle,
+            subtitle = bioSubtitle,
+            negativeText = bioCancel,
+            onSuccess = {
+                haptics.perform(RelayHapticEvent.Confirm)
+                scope.launch { repo.setBiometricEnabled(true) }
+            },
+            onError = { _, msg -> bioNotice = msg.toString() },
+        )
+    }
 
     Column(
         modifier = modifier
@@ -229,7 +268,7 @@ fun SettingsScreen(
                         checked = settings.lockEnabled,
                         onCheckedChange = { checked ->
                             haptics.perform(if (checked) RelayHapticEvent.ToggleOn else RelayHapticEvent.ToggleOff)
-                            if (checked && !settings.hasPin) {
+                            if (checked && !settings.hasPin && !settings.biometricEnabled) {
                                 pinDialog = true
                             } else {
                                 scope.launch { repo.setLockEnabled(checked) }
@@ -240,10 +279,35 @@ fun SettingsScreen(
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 modifier = Modifier.clickable {
                     val next = !settings.lockEnabled
-                    if (next && !settings.hasPin) pinDialog = true
+                    if (next && !settings.hasPin && !settings.biometricEnabled) pinDialog = true
                     else scope.launch { repo.setLockEnabled(next) }
                 },
             )
+            AnimatedVisibility(
+                visible = settings.lockEnabled && hasBiometricHardware,
+                enter = expandVertically(Motion.defaultSpatialSpec()) + fadeIn(Motion.defaultEffectsSpec()),
+                exit = shrinkVertically(Motion.defaultSpatialSpec()) + fadeOut(Motion.defaultEffectsSpec()),
+            ) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_biometric)) },
+                    supportingContent = { Text(stringResource(R.string.settings_biometric_body)) },
+                    trailingContent = {
+                        Switch(
+                            checked = settings.biometricEnabled,
+                            onCheckedChange = { checked ->
+                                haptics.perform(if (checked) RelayHapticEvent.ToggleOn else RelayHapticEvent.ToggleOff)
+                                if (checked) enrollBiometric()
+                                else scope.launch { repo.setBiometricEnabled(false) }
+                            },
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.clickable {
+                        if (!settings.biometricEnabled) enrollBiometric()
+                        else scope.launch { repo.setBiometricEnabled(false) }
+                    },
+                )
+            }
             AnimatedVisibility(
                 visible = settings.lockEnabled,
                 enter = expandVertically(Motion.defaultSpatialSpec()) + fadeIn(Motion.defaultEffectsSpec()),
@@ -259,6 +323,14 @@ fun SettingsScreen(
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier.clickable { pinDialog = true },
+                )
+            }
+            bioNotice?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs),
                 )
             }
         }
